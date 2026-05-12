@@ -5,12 +5,12 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
+@Entity
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Entity
 public class HistoriqueAction {
 
     @Id
@@ -18,22 +18,15 @@ public class HistoriqueAction {
     private Long id;
 
     private Long encadrementId;
-    private Long sujetId;
 
-    @Column(nullable=false)
     private Long acteurId;
 
-    @Column(nullable=false)
     private String acteurNomComplet;
 
-    @Column(nullable=false)
     private String acteurRole;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable=false, length=40)
-    private TypeAction typeAction;
+    private String action;
 
-    @Column(nullable=false)
     private String titre;
 
     @Column(columnDefinition = "TEXT")

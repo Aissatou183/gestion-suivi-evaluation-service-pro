@@ -9,18 +9,18 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class EvaluationProjetResponse {
+public class EvaluationResponse {
+
     private Long id;
     private Long encadrementId;
-    private Long sujetId;
-    private String sujetTitre;
-    private Long etudiantId;
-    private String etudiantNomComplet;
+
     private Long enseignantId;
     private String enseignantNomComplet;
+
     private Integer noteGlobale;
     private String appreciation;
     private String pointsForts;
     private String pointsAAmeliorer;
+
     private LocalDateTime dateEvaluation;
 }

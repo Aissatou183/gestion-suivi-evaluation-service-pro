@@ -1,15 +1,13 @@
 package com.uasz.gestion_suivi_evaluation_service.service;
 
-import com.lowagie.text.Document;
-import com.lowagie.text.FontFactory;
-import com.lowagie.text.PageSize;
-import com.lowagie.text.Paragraph;
+import com.lowagie.text.*;
+import com.lowagie.text.Font;
 import com.lowagie.text.pdf.PdfWriter;
+import com.uasz.gestion_suivi_evaluation_service.client.LivrableClient;
 import com.uasz.gestion_suivi_evaluation_service.dto.*;
 import lombok.RequiredArgsConstructor;
+import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 
@@ -20,18 +18,21 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RapportService {
 
-    private final SuiviEvaluationService suiviEvaluationService;
+    private final IndicateurService indicateurService;
+    private final SuiviService suiviService;
+    private final EvaluationService evaluationService;
+    private final HistoriqueService historiqueService;
+    private final LivrableClient livrableClient;
+    private final HistoriqueService historique;
 
-    public byte[] genererPdf(Long encadrementId, String token) {
+    public byte[] genererPdf(Long encadrementId, String token, Long userId, String nom, String role) {
+
         try {
-            IndicateurProjetResponse indicateurs =
-                    suiviEvaluationService.indicateurs(encadrementId, token);
-
-            List<SuiviProjetResponse> suivis =
-                    suiviEvaluationService.suivisParEncadrement(encadrementId);
-
-            List<EvaluationProjetResponse> evaluations =
-                    suiviEvaluationService.evaluationsParEncadrement(encadrementId);
+            IndicateurResponse indicateurs = indicateurService.calculer(encadrementId, token);
+            List<SuiviResponse> suivis = suiviService.parEncadrement(encadrementId);
+            List<EvaluationResponse> evaluations = evaluationService.parEncadrement(encadrementId);
+            List<HistoriqueResponse> historiques = historiqueService.parEncadrement(encadrementId);
+            List<LivrableResponse> livrables = livrableClient.livrablesParEncadrement(encadrementId, token);
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
 
@@ -40,62 +41,81 @@ public class RapportService {
 
             document.open();
 
-            com.lowagie.text.Font titleFont =
-                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18);
+            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18);
+            Font sectionFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 13);
+            Font normalFont = FontFactory.getFont(FontFactory.HELVETICA, 10);
 
-            com.lowagie.text.Font sectionFont =
-                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 13);
-
-            com.lowagie.text.Font normalFont =
-                    FontFactory.getFont(FontFactory.HELVETICA, 10);
-
-            document.add(new Paragraph("Rapport de suivi et évaluation du projet", titleFont));
-            document.add(new Paragraph("Université Assane Seck de Ziguinchor", normalFont));
+            document.add(new Paragraph("Rapport de suivi et évaluation", titleFont));
+            document.add(new Paragraph("Encadrement ID : " + encadrementId, normalFont));
             document.add(new Paragraph(" "));
 
-            document.add(new Paragraph("Informations du projet", sectionFont));
-            document.add(new Paragraph("Sujet : " + safe(indicateurs.getSujetTitre()), normalFont));
-            document.add(new Paragraph("Étudiant : " + safe(indicateurs.getEtudiantNomComplet()), normalFont));
-            document.add(new Paragraph("Encadreur : " + safe(indicateurs.getEnseignantNomComplet()), normalFont));
-            document.add(new Paragraph("Statut : " + safe(indicateurs.getStatutProjet()), normalFont));
-            document.add(new Paragraph("Avancement : " + indicateurs.getAvancementActuel() + "%", normalFont));
-            document.add(new Paragraph("Niveau de risque : " + indicateurs.getNiveauRisque(), normalFont));
+            document.add(new Paragraph("1. Indicateurs d’avancement", sectionFont));
+            document.add(new Paragraph("Avancement actuel : " + indicateurs.getAvancementActuel() + "%", normalFont));
             document.add(new Paragraph("Nombre de livrables : " + indicateurs.getNombreLivrables(), normalFont));
-            document.add(new Paragraph("Moyenne livrables : " + indicateurs.getMoyenneLivrables(), normalFont));
+            document.add(new Paragraph("Livrables validés/évalués : " + indicateurs.getLivrablesValides(), normalFont));
+            document.add(new Paragraph("Livrables en retard : " + indicateurs.getLivrablesEnRetard(), normalFont));
+            document.add(new Paragraph("Moyenne livrables : " + indicateurs.getMoyenneLivrables() + "/20", normalFont));
+            document.add(new Paragraph("Niveau de risque : " + indicateurs.getNiveauRisque(), normalFont));
+            document.add(new Paragraph("Statut projet : " + indicateurs.getStatutProjet(), normalFont));
             document.add(new Paragraph(" "));
 
-            document.add(new Paragraph("Derniers suivis", sectionFont));
-
-            if (suivis.isEmpty()) {
-                document.add(new Paragraph("Aucun suivi enregistré.", normalFont));
-            } else {
-                for (SuiviProjetResponse s : suivis) {
-                    document.add(new Paragraph(
-                            "- " + s.getDateSuivi()
-                                    + " | Avancement : " + s.getAvancementPourcentage() + "%"
-                                    + " | " + safe(s.getObservations()),
-                            normalFont
-                    ));
-                }
+            document.add(new Paragraph("2. Livrables", sectionFont));
+            for (LivrableResponse l : livrables) {
+                document.add(new Paragraph(
+                        "- " + l.getTypeLivrable()
+                                + " | v" + l.getVersion()
+                                + " | statut : " + l.getStatut()
+                                + " | note : " + (l.getNote() == null ? "Non évalué" : l.getNote() + "/20"),
+                        normalFont
+                ));
             }
-
             document.add(new Paragraph(" "));
-            document.add(new Paragraph("Évaluations", sectionFont));
 
-            if (evaluations.isEmpty()) {
-                document.add(new Paragraph("Aucune évaluation enregistrée.", normalFont));
-            } else {
-                for (EvaluationProjetResponse e : evaluations) {
-                    document.add(new Paragraph(
-                            "- " + e.getDateEvaluation()
-                                    + " | Note : " + e.getNoteGlobale() + "/20"
-                                    + " | " + safe(e.getAppreciation()),
-                            normalFont
-                    ));
-                }
+            document.add(new Paragraph("3. Suivis pédagogiques", sectionFont));
+            for (SuiviResponse s : suivis) {
+                document.add(new Paragraph(
+                        "- " + s.getDateSuivi()
+                                + " | Avancement : " + s.getAvancementPourcentage() + "%"
+                                + " | Risque : " + s.getNiveauRisque(),
+                        normalFont
+                ));
+                document.add(new Paragraph("  Observations : " + s.getObservations(), normalFont));
+                document.add(new Paragraph("  Recommandations : " + safe(s.getRecommandations()), normalFont));
+            }
+            document.add(new Paragraph(" "));
+
+            document.add(new Paragraph("4. Évaluations globales", sectionFont));
+            for (EvaluationResponse e : evaluations) {
+                document.add(new Paragraph(
+                        "- Note globale : " + e.getNoteGlobale() + "/20 | Enseignant : " + e.getEnseignantNomComplet(),
+                        normalFont
+                ));
+                document.add(new Paragraph("  Appréciation : " + safe(e.getAppreciation()), normalFont));
+            }
+            document.add(new Paragraph(" "));
+
+            document.add(new Paragraph("5. Historique des actions", sectionFont));
+            for (HistoriqueResponse h : historiques) {
+                document.add(new Paragraph(
+                        "- " + h.getDateAction()
+                                + " | " + h.getAction()
+                                + " | " + h.getActeurNomComplet()
+                                + " | " + h.getDescription(),
+                        normalFont
+                ));
             }
 
             document.close();
+
+            historique.ajouter(
+                    encadrementId,
+                    userId,
+                    nom,
+                    role,
+                    "GENERATION_RAPPORT_PDF",
+                    "Rapport PDF généré",
+                    "Génération du rapport PDF du projet."
+            );
 
             return out.toByteArray();
 
@@ -104,45 +124,56 @@ public class RapportService {
         }
     }
 
-    public byte[] genererExcel(Long encadrementId, String token) {
+    public byte[] genererExcel(Long encadrementId, String token, Long userId, String nom, String role) {
+
         try {
-            IndicateurProjetResponse indicateurs =
-                    suiviEvaluationService.indicateurs(encadrementId, token);
-
-            List<SuiviProjetResponse> suivis =
-                    suiviEvaluationService.suivisParEncadrement(encadrementId);
-
-            List<EvaluationProjetResponse> evaluations =
-                    suiviEvaluationService.evaluationsParEncadrement(encadrementId);
+            IndicateurResponse indicateurs = indicateurService.calculer(encadrementId, token);
+            List<SuiviResponse> suivis = suiviService.parEncadrement(encadrementId);
+            List<EvaluationResponse> evaluations = evaluationService.parEncadrement(encadrementId);
+            List<LivrableResponse> livrables = livrableClient.livrablesParEncadrement(encadrementId, token);
 
             Workbook workbook = new XSSFWorkbook();
 
-            Sheet sheetInfo = workbook.createSheet("Indicateurs");
+            Sheet sheet = workbook.createSheet("Rapport Suivi");
+            int rowIndex = 0;
 
-            Row header = sheetInfo.createRow(0);
-            header.createCell(0).setCellValue("Champ");
+            Row title = sheet.createRow(rowIndex++);
+            title.createCell(0).setCellValue("Rapport de suivi et évaluation");
+
+            rowIndex++;
+
+            Row header = sheet.createRow(rowIndex++);
+            header.createCell(0).setCellValue("Indicateur");
             header.createCell(1).setCellValue("Valeur");
 
-            String[][] data = {
-                    {"Sujet", safe(indicateurs.getSujetTitre())},
-                    {"Étudiant", safe(indicateurs.getEtudiantNomComplet())},
-                    {"Encadreur", safe(indicateurs.getEnseignantNomComplet())},
-                    {"Avancement", indicateurs.getAvancementActuel() + "%"},
-                    {"Risque", String.valueOf(indicateurs.getNiveauRisque())},
-                    {"Statut", safe(indicateurs.getStatutProjet())},
-                    {"Nombre livrables", String.valueOf(indicateurs.getNombreLivrables())},
-                    {"Moyenne livrables", String.valueOf(indicateurs.getMoyenneLivrables())}
-            };
+            rowIndex = add(sheet, rowIndex, "Avancement", indicateurs.getAvancementActuel() + "%");
+            rowIndex = add(sheet, rowIndex, "Nombre livrables", String.valueOf(indicateurs.getNombreLivrables()));
+            rowIndex = add(sheet, rowIndex, "Livrables validés/évalués", String.valueOf(indicateurs.getLivrablesValides()));
+            rowIndex = add(sheet, rowIndex, "Livrables en retard", String.valueOf(indicateurs.getLivrablesEnRetard()));
+            rowIndex = add(sheet, rowIndex, "Moyenne livrables", indicateurs.getMoyenneLivrables() + "/20");
+            rowIndex = add(sheet, rowIndex, "Risque", indicateurs.getNiveauRisque());
+            rowIndex = add(sheet, rowIndex, "Statut", indicateurs.getStatutProjet());
 
-            for (int i = 0; i < data.length; i++) {
-                Row row = sheetInfo.createRow(i + 1);
-                row.createCell(0).setCellValue(data[i][0]);
-                row.createCell(1).setCellValue(data[i][1]);
+            Sheet livSheet = workbook.createSheet("Livrables");
+            Row livHeader = livSheet.createRow(0);
+            livHeader.createCell(0).setCellValue("Type");
+            livHeader.createCell(1).setCellValue("Version");
+            livHeader.createCell(2).setCellValue("Statut");
+            livHeader.createCell(3).setCellValue("Note");
+            livHeader.createCell(4).setCellValue("Date dépôt");
+
+            int i = 1;
+            for (LivrableResponse l : livrables) {
+                Row r = livSheet.createRow(i++);
+                r.createCell(0).setCellValue(safe(l.getTypeLivrable()));
+                r.createCell(1).setCellValue(l.getVersion() == null ? 0 : l.getVersion());
+                r.createCell(2).setCellValue(safe(l.getStatut()));
+                r.createCell(3).setCellValue(l.getNote() == null ? 0 : l.getNote());
+                r.createCell(4).setCellValue(l.getDateDepot() == null ? "" : l.getDateDepot().toString());
             }
 
-            Sheet sheetSuivis = workbook.createSheet("Suivis");
-
-            Row suiviHeader = sheetSuivis.createRow(0);
+            Sheet suiviSheet = workbook.createSheet("Suivis");
+            Row suiviHeader = suiviSheet.createRow(0);
             suiviHeader.createCell(0).setCellValue("Date");
             suiviHeader.createCell(1).setCellValue("Avancement");
             suiviHeader.createCell(2).setCellValue("Qualité");
@@ -151,47 +182,54 @@ public class RapportService {
             suiviHeader.createCell(5).setCellValue("Risque");
             suiviHeader.createCell(6).setCellValue("Observations");
 
-            int rowIndex = 1;
-
-            for (SuiviProjetResponse s : suivis) {
-                Row row = sheetSuivis.createRow(rowIndex++);
-                row.createCell(0).setCellValue(String.valueOf(s.getDateSuivi()));
-                row.createCell(1).setCellValue(valueOrZero(s.getAvancementPourcentage()));
-                row.createCell(2).setCellValue(valueOrZero(s.getQualiteTravail()));
-                row.createCell(3).setCellValue(valueOrZero(s.getRespectDelais()));
-                row.createCell(4).setCellValue(valueOrZero(s.getParticipationEtudiant()));
-                row.createCell(5).setCellValue(String.valueOf(s.getNiveauRisque()));
-                row.createCell(6).setCellValue(safe(s.getObservations()));
+            i = 1;
+            for (SuiviResponse s : suivis) {
+                Row r = suiviSheet.createRow(i++);
+                r.createCell(0).setCellValue(s.getDateSuivi() == null ? "" : s.getDateSuivi().toString());
+                r.createCell(1).setCellValue(s.getAvancementPourcentage());
+                r.createCell(2).setCellValue(s.getQualiteTravail());
+                r.createCell(3).setCellValue(s.getRespectDelais());
+                r.createCell(4).setCellValue(s.getParticipationEtudiant());
+                r.createCell(5).setCellValue(safe(s.getNiveauRisque()));
+                r.createCell(6).setCellValue(safe(s.getObservations()));
             }
 
-            Sheet sheetEval = workbook.createSheet("Evaluations");
-
-            Row evalHeader = sheetEval.createRow(0);
+            Sheet evalSheet = workbook.createSheet("Evaluations");
+            Row evalHeader = evalSheet.createRow(0);
             evalHeader.createCell(0).setCellValue("Date");
-            evalHeader.createCell(1).setCellValue("Note");
-            evalHeader.createCell(2).setCellValue("Appréciation");
-            evalHeader.createCell(3).setCellValue("Points forts");
-            evalHeader.createCell(4).setCellValue("Points à améliorer");
+            evalHeader.createCell(1).setCellValue("Enseignant");
+            evalHeader.createCell(2).setCellValue("Note globale");
+            evalHeader.createCell(3).setCellValue("Appréciation");
 
-            rowIndex = 1;
-
-            for (EvaluationProjetResponse e : evaluations) {
-                Row row = sheetEval.createRow(rowIndex++);
-                row.createCell(0).setCellValue(String.valueOf(e.getDateEvaluation()));
-                row.createCell(1).setCellValue(valueOrZero(e.getNoteGlobale()));
-                row.createCell(2).setCellValue(safe(e.getAppreciation()));
-                row.createCell(3).setCellValue(safe(e.getPointsForts()));
-                row.createCell(4).setCellValue(safe(e.getPointsAAmeliorer()));
+            i = 1;
+            for (EvaluationResponse e : evaluations) {
+                Row r = evalSheet.createRow(i++);
+                r.createCell(0).setCellValue(e.getDateEvaluation() == null ? "" : e.getDateEvaluation().toString());
+                r.createCell(1).setCellValue(safe(e.getEnseignantNomComplet()));
+                r.createCell(2).setCellValue(e.getNoteGlobale() == null ? 0 : e.getNoteGlobale());
+                r.createCell(3).setCellValue(safe(e.getAppreciation()));
             }
 
-            autoSize(sheetInfo, 2);
-            autoSize(sheetSuivis, 7);
-            autoSize(sheetEval, 5);
+            for (int c = 0; c < 6; c++) {
+                sheet.autoSizeColumn(c);
+                livSheet.autoSizeColumn(c);
+                suiviSheet.autoSizeColumn(c);
+                evalSheet.autoSizeColumn(c);
+            }
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-
             workbook.write(out);
             workbook.close();
+
+            historique.ajouter(
+                    encadrementId,
+                    userId,
+                    nom,
+                    role,
+                    "GENERATION_RAPPORT_EXCEL",
+                    "Rapport Excel généré",
+                    "Génération du rapport Excel du projet."
+            );
 
             return out.toByteArray();
 
@@ -200,17 +238,14 @@ public class RapportService {
         }
     }
 
+    private int add(Sheet sheet, int rowIndex, String label, String value) {
+        Row row = sheet.createRow(rowIndex++);
+        row.createCell(0).setCellValue(label);
+        row.createCell(1).setCellValue(value);
+        return rowIndex;
+    }
+
     private String safe(String value) {
         return value == null ? "" : value;
-    }
-
-    private int valueOrZero(Integer value) {
-        return value == null ? 0 : value;
-    }
-
-    private void autoSize(Sheet sheet, int numberOfColumns) {
-        for (int i = 0; i < numberOfColumns; i++) {
-            sheet.autoSizeColumn(i);
-        }
     }
 }

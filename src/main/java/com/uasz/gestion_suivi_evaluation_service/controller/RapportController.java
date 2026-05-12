@@ -1,9 +1,12 @@
 package com.uasz.gestion_suivi_evaluation_service.controller;
 
+import com.uasz.gestion_suivi_evaluation_service.security.JwtService;
 import com.uasz.gestion_suivi_evaluation_service.service.RapportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
+
+import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/rapports")
@@ -11,37 +14,61 @@ import org.springframework.web.bind.annotation.*;
 public class RapportController {
 
     private final RapportService rapportService;
+    private final JwtService jwtService;
 
-    private String token(String authorizationHeader) {
-        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            return "";
-        }
-        return authorizationHeader.substring(7);
+    private String token(String auth) {
+        return auth == null ? "" : auth.replace("Bearer ", "");
     }
 
     @GetMapping("/{encadrementId}/pdf")
-    public ResponseEntity<byte[]> rapportPdf(
+    public ResponseEntity<byte[]> pdf(
             @PathVariable Long encadrementId,
-            @RequestHeader("Authorization") String authorizationHeader
+            @RequestHeader("Authorization") String authorization
     ) {
-        byte[] data = rapportService.genererPdf(encadrementId, token(authorizationHeader));
+        String token = token(authorization);
+
+        byte[] data = rapportService.genererPdf(
+                encadrementId,
+                token,
+                jwtService.extractUserId(token),
+                jwtService.extractNomComplet(token),
+                jwtService.extractRole(token)
+        );
+
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename("rapport-suivi-" + encadrementId + ".pdf", StandardCharsets.UTF_8)
+                .build();
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"rapport-suivi-" + encadrementId + ".pdf\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .body(data);
     }
 
     @GetMapping("/{encadrementId}/excel")
-    public ResponseEntity<byte[]> rapportExcel(
+    public ResponseEntity<byte[]> excel(
             @PathVariable Long encadrementId,
-            @RequestHeader("Authorization") String authorizationHeader
+            @RequestHeader("Authorization") String authorization
     ) {
-        byte[] data = rapportService.genererExcel(encadrementId, token(authorizationHeader));
+        String token = token(authorization);
+
+        byte[] data = rapportService.genererExcel(
+                encadrementId,
+                token,
+                jwtService.extractUserId(token),
+                jwtService.extractNomComplet(token),
+                jwtService.extractRole(token)
+        );
+
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename("rapport-suivi-" + encadrementId + ".xlsx", StandardCharsets.UTF_8)
+                .build();
 
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"rapport-suivi-" + encadrementId + ".xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .body(data);
     }
 }

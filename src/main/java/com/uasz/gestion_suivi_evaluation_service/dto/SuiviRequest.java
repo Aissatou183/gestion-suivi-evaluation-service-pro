@@ -5,31 +5,36 @@ import lombok.*;
 
 @Getter
 @Setter
-public class SuiviProjetRequest {
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class SuiviRequest {
 
-    @NotNull(message = "L'encadrement est obligatoire")
+    @NotNull
     private Long encadrementId;
 
-    @NotNull(message = "L'avancement est obligatoire")
+    @NotNull
     @Min(0)
     @Max(100)
     private Integer avancementPourcentage;
 
-    @NotNull(message = "La qualité du travail est obligatoire")
+    @NotNull
     @Min(0)
     @Max(20)
     private Integer qualiteTravail;
 
-    @NotNull(message = "Le respect des délais est obligatoire")
+    @NotNull
     @Min(0)
     @Max(20)
     private Integer respectDelais;
 
-    @NotNull(message = "La participation de l'étudiant est obligatoire")
+    @NotNull
     @Min(0)
     @Max(20)
     private Integer participationEtudiant;
 
+    @NotBlank
     private String observations;
+
     private String recommandations;
 }

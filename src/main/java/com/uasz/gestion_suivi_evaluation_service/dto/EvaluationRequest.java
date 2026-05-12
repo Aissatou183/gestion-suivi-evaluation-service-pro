@@ -5,19 +5,20 @@ import lombok.*;
 
 @Getter
 @Setter
-public class EvaluationProjetRequest {
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class EvaluationRequest {
 
-    @NotNull(message = "L'encadrement est obligatoire")
+    @NotNull
     private Long encadrementId;
 
-    @NotNull(message = "La note globale est obligatoire")
+    @NotNull
     @Min(0)
     @Max(20)
     private Integer noteGlobale;
 
-    @NotBlank(message = "L'appréciation est obligatoire")
     private String appreciation;
-
     private String pointsForts;
     private String pointsAAmeliorer;
 }

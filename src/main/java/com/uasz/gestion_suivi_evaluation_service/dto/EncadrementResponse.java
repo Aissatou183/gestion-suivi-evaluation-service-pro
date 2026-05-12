@@ -6,15 +6,22 @@ import lombok.*;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class EncadrementResponse {
+
     private Long id;
+
     private Long sujetId;
+
     private String sujetTitre;
+
     private Long etudiantId;
+
     private String etudiantNomComplet;
+
     private Long enseignantId;
+
     private String enseignantNomComplet;
-    private String enseignantSpecialite;
-    private String typeEncadreur;
+
     private String statut;
 }
