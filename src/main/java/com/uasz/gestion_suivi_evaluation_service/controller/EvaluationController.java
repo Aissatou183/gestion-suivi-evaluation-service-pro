@@ -18,30 +18,88 @@ public class EvaluationController {
     private final EvaluationService evaluationService;
     private final JwtService jwtService;
 
-    private String token(String auth) {
-        if (auth == null || !auth.startsWith("Bearer ")) {
-            return "";
+    /*
+     * =========================================================
+     * JWT
+     * =========================================================
+     */
+
+    private String token(String authorizationHeader) {
+
+        if (authorizationHeader == null
+                || !authorizationHeader.startsWith("Bearer ")) {
+
+            throw new RuntimeException(
+                    "Token JWT manquant ou invalide."
+            );
         }
-        return auth.substring(7);
+
+        return authorizationHeader.substring(7);
     }
+
+    private Long userId(String jwt) {
+        return jwtService.extractUserId(jwt);
+    }
+
+    private String nomComplet(String jwt) {
+        return jwtService.extractNomComplet(jwt);
+    }
+
+    private String role(String jwt) {
+        return jwtService.extractRole(jwt);
+    }
+
+    /*
+     * =========================================================
+     * CREER EVALUATION
+     * =========================================================
+     */
 
     @PostMapping
     public EvaluationResponse creer(
-            @Valid @RequestBody EvaluationRequest request,
-            @RequestHeader("Authorization") String authorization
+
+            @Valid
+            @RequestBody
+            EvaluationRequest request,
+
+            @RequestHeader("Authorization")
+            String authorizationHeader
     ) {
-        String token = token(authorization);
+
+        String jwt = token(authorizationHeader);
 
         return evaluationService.creer(
                 request,
-                jwtService.extractUserId(token),
-                jwtService.extractNomComplet(token),
-                jwtService.extractRole(token)
+                userId(jwt),
+                nomComplet(jwt),
+                role(jwt),
+                jwt
         );
     }
 
+    /*
+     * =========================================================
+     * LISTE PAR ENCADREMENT
+     * =========================================================
+     */
+
     @GetMapping("/encadrement/{encadrementId}")
-    public List<EvaluationResponse> parEncadrement(@PathVariable Long encadrementId) {
-        return evaluationService.parEncadrement(encadrementId);
+    public List<EvaluationResponse> parEncadrement(
+
+            @PathVariable
+            Long encadrementId,
+
+            @RequestHeader("Authorization")
+            String authorizationHeader
+    ) {
+
+        String jwt = token(authorizationHeader);
+
+        return evaluationService.parEncadrement(
+                encadrementId,
+                userId(jwt),
+                role(jwt),
+                jwt
+        );
     }
 }

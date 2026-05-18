@@ -18,30 +18,88 @@ public class SuiviController {
     private final SuiviService suiviService;
     private final JwtService jwtService;
 
-    private String token(String auth) {
-        if (auth == null || !auth.startsWith("Bearer ")) {
-            return "";
+    /*
+     * =========================================================
+     * JWT
+     * =========================================================
+     */
+
+    private String token(String authorizationHeader) {
+
+        if (authorizationHeader == null
+                || !authorizationHeader.startsWith("Bearer ")) {
+
+            throw new RuntimeException(
+                    "Token JWT manquant ou invalide."
+            );
         }
-        return auth.substring(7);
+
+        return authorizationHeader.substring(7);
     }
+
+    private Long userId(String jwt) {
+        return jwtService.extractUserId(jwt);
+    }
+
+    private String nomComplet(String jwt) {
+        return jwtService.extractNomComplet(jwt);
+    }
+
+    private String role(String jwt) {
+        return jwtService.extractRole(jwt);
+    }
+
+    /*
+     * =========================================================
+     * CREER SUIVI
+     * =========================================================
+     */
 
     @PostMapping
     public SuiviResponse creer(
-            @Valid @RequestBody SuiviRequest request,
-            @RequestHeader("Authorization") String authorization
+
+            @Valid
+            @RequestBody
+            SuiviRequest request,
+
+            @RequestHeader("Authorization")
+            String authorizationHeader
     ) {
-        String token = token(authorization);
+
+        String jwt = token(authorizationHeader);
 
         return suiviService.creer(
                 request,
-                jwtService.extractUserId(token),
-                jwtService.extractNomComplet(token),
-                jwtService.extractRole(token)
+                userId(jwt),
+                nomComplet(jwt),
+                role(jwt),
+                jwt
         );
     }
 
+    /*
+     * =========================================================
+     * LISTE PAR ENCADREMENT
+     * =========================================================
+     */
+
     @GetMapping("/encadrement/{encadrementId}")
-    public List<SuiviResponse> parEncadrement(@PathVariable Long encadrementId) {
-        return suiviService.parEncadrement(encadrementId);
+    public List<SuiviResponse> parEncadrement(
+
+            @PathVariable
+            Long encadrementId,
+
+            @RequestHeader("Authorization")
+            String authorizationHeader
+    ) {
+
+        String jwt = token(authorizationHeader);
+
+        return suiviService.parEncadrement(
+                encadrementId,
+                userId(jwt),
+                role(jwt),
+                jwt
+        );
     }
 }

@@ -6,8 +6,9 @@ import com.lowagie.text.pdf.PdfWriter;
 import com.uasz.gestion_suivi_evaluation_service.client.LivrableClient;
 import com.uasz.gestion_suivi_evaluation_service.dto.*;
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 
@@ -23,22 +24,33 @@ public class RapportService {
     private final EvaluationService evaluationService;
     private final HistoriqueService historiqueService;
     private final LivrableClient livrableClient;
-    private final HistoriqueService historique;
 
-    public byte[] genererPdf(Long encadrementId, String token, Long userId, String nom, String role) {
-
+    public byte[] genererPdf(
+            Long encadrementId,
+            String token,
+            Long userId,
+            String nom,
+            String role
+    ) {
         try {
-            IndicateurResponse indicateurs = indicateurService.calculer(encadrementId, token);
-            List<SuiviResponse> suivis = suiviService.parEncadrement(encadrementId);
-            List<EvaluationResponse> evaluations = evaluationService.parEncadrement(encadrementId);
-            List<HistoriqueResponse> historiques = historiqueService.parEncadrement(encadrementId);
-            List<LivrableResponse> livrables = livrableClient.livrablesParEncadrement(encadrementId, token);
+            IndicateurResponse indicateurs =
+                    indicateurService.calculer(encadrementId, userId, role, token);
+
+            List<SuiviResponse> suivis =
+                    suiviService.parEncadrement(encadrementId, userId, role, token);
+
+            List<EvaluationResponse> evaluations =
+                    evaluationService.parEncadrement(encadrementId, userId, role, token);
+
+            List<HistoriqueResponse> historiques =
+                    historiqueService.parEncadrement(encadrementId, userId, role, token);
+
+            List<LivrableResponse> livrables =
+                    livrableClient.livrablesParEncadrement(encadrementId, token);
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-
             Document document = new Document(PageSize.A4);
             PdfWriter.getInstance(document, out);
-
             document.open();
 
             Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18);
@@ -51,63 +63,74 @@ public class RapportService {
 
             document.add(new Paragraph("1. Indicateurs d’avancement", sectionFont));
             document.add(new Paragraph("Avancement actuel : " + indicateurs.getAvancementActuel() + "%", normalFont));
+            document.add(new Paragraph("Nombre de suivis : " + indicateurs.getNombreSuivis(), normalFont));
             document.add(new Paragraph("Nombre de livrables : " + indicateurs.getNombreLivrables(), normalFont));
-            document.add(new Paragraph("Livrables validés/évalués : " + indicateurs.getLivrablesValides(), normalFont));
+            document.add(new Paragraph("Livrables validés : " + indicateurs.getLivrablesValides(), normalFont));
             document.add(new Paragraph("Livrables en retard : " + indicateurs.getLivrablesEnRetard(), normalFont));
-            document.add(new Paragraph("Moyenne livrables : " + indicateurs.getMoyenneLivrables() + "/20", normalFont));
+            document.add(new Paragraph("Moyenne des livrables : " + indicateurs.getMoyenneLivrables() + "/20", normalFont));
             document.add(new Paragraph("Niveau de risque : " + indicateurs.getNiveauRisque(), normalFont));
             document.add(new Paragraph("Statut projet : " + indicateurs.getStatutProjet(), normalFont));
             document.add(new Paragraph(" "));
 
             document.add(new Paragraph("2. Livrables", sectionFont));
+
             for (LivrableResponse l : livrables) {
                 document.add(new Paragraph(
-                        "- " + l.getTypeLivrable()
-                                + " | v" + l.getVersion()
-                                + " | statut : " + l.getStatut()
-                                + " | note : " + (l.getNote() == null ? "Non évalué" : l.getNote() + "/20"),
+                        "- " + safe(l.getTypeLivrable())
+                                + " | Version " + safeInt(l.getVersion())
+                                + " | " + safe(l.getStatut())
+                                + " | Note : " + (l.getNote() == null ? "Non évalué" : l.getNote() + "/20"),
                         normalFont
                 ));
             }
-            document.add(new Paragraph(" "));
 
+            document.add(new Paragraph(" "));
             document.add(new Paragraph("3. Suivis pédagogiques", sectionFont));
+
             for (SuiviResponse s : suivis) {
                 document.add(new Paragraph(
-                        "- " + s.getDateSuivi()
-                                + " | Avancement : " + s.getAvancementPourcentage() + "%"
-                                + " | Risque : " + s.getNiveauRisque(),
+                        "- " + safeDate(s.getDateSuivi())
+                                + " | Avancement : " + safeInt(s.getAvancementPourcentage()) + "%"
+                                + " | Risque : " + safe(s.getNiveauRisque()),
                         normalFont
                 ));
-                document.add(new Paragraph("  Observations : " + s.getObservations(), normalFont));
+
+                document.add(new Paragraph("  Enseignant : " + safe(s.getEnseignantNomComplet()), normalFont));
+                document.add(new Paragraph("  Observations : " + safe(s.getObservations()), normalFont));
                 document.add(new Paragraph("  Recommandations : " + safe(s.getRecommandations()), normalFont));
             }
-            document.add(new Paragraph(" "));
 
-            document.add(new Paragraph("4. Évaluations globales", sectionFont));
+            document.add(new Paragraph(" "));
+            document.add(new Paragraph("4. Évaluations", sectionFont));
+
             for (EvaluationResponse e : evaluations) {
                 document.add(new Paragraph(
-                        "- Note globale : " + e.getNoteGlobale() + "/20 | Enseignant : " + e.getEnseignantNomComplet(),
+                        "- " + safe(e.getEnseignantNomComplet())
+                                + " | Note : " + safeInt(e.getNoteGlobale()) + "/20",
                         normalFont
                 ));
-                document.add(new Paragraph("  Appréciation : " + safe(e.getAppreciation()), normalFont));
-            }
-            document.add(new Paragraph(" "));
 
-            document.add(new Paragraph("5. Historique des actions", sectionFont));
+                document.add(new Paragraph("  Appréciation : " + safe(e.getAppreciation()), normalFont));
+                document.add(new Paragraph("  Points forts : " + safe(e.getPointsForts()), normalFont));
+                document.add(new Paragraph("  Points à améliorer : " + safe(e.getPointsAAmeliorer()), normalFont));
+            }
+
+            document.add(new Paragraph(" "));
+            document.add(new Paragraph("5. Historique", sectionFont));
+
             for (HistoriqueResponse h : historiques) {
                 document.add(new Paragraph(
-                        "- " + h.getDateAction()
-                                + " | " + h.getAction()
-                                + " | " + h.getActeurNomComplet()
-                                + " | " + h.getDescription(),
+                        "- " + safeDate(h.getDateAction())
+                                + " | " + safe(h.getAction())
+                                + " | " + safe(h.getActeurNomComplet())
+                                + " | " + safe(h.getDescription()),
                         normalFont
                 ));
             }
 
             document.close();
 
-            historique.ajouter(
+            historiqueService.ajouter(
                     encadrementId,
                     userId,
                     nom,
@@ -124,104 +147,133 @@ public class RapportService {
         }
     }
 
-    public byte[] genererExcel(Long encadrementId, String token, Long userId, String nom, String role) {
-
+    public byte[] genererExcel(
+            Long encadrementId,
+            String token,
+            Long userId,
+            String nom,
+            String role
+    ) {
         try {
-            IndicateurResponse indicateurs = indicateurService.calculer(encadrementId, token);
-            List<SuiviResponse> suivis = suiviService.parEncadrement(encadrementId);
-            List<EvaluationResponse> evaluations = evaluationService.parEncadrement(encadrementId);
-            List<LivrableResponse> livrables = livrableClient.livrablesParEncadrement(encadrementId, token);
+            IndicateurResponse indicateurs =
+                    indicateurService.calculer(encadrementId, userId, role, token);
+
+            List<SuiviResponse> suivis =
+                    suiviService.parEncadrement(encadrementId, userId, role, token);
+
+            List<EvaluationResponse> evaluations =
+                    evaluationService.parEncadrement(encadrementId, userId, role, token);
+
+            List<HistoriqueResponse> historiques =
+                    historiqueService.parEncadrement(encadrementId, userId, role, token);
+
+            List<LivrableResponse> livrables =
+                    livrableClient.livrablesParEncadrement(encadrementId, token);
 
             Workbook workbook = new XSSFWorkbook();
 
-            Sheet sheet = workbook.createSheet("Rapport Suivi");
-            int rowIndex = 0;
+            Sheet sheetIndicateurs = workbook.createSheet("Indicateurs");
+            Row headerIndicateur = sheetIndicateurs.createRow(0);
+            headerIndicateur.createCell(0).setCellValue("Indicateur");
+            headerIndicateur.createCell(1).setCellValue("Valeur");
 
-            Row title = sheet.createRow(rowIndex++);
-            title.createCell(0).setCellValue("Rapport de suivi et évaluation");
+            Object[][] indicateurData = {
+                    {"Avancement", indicateurs.getAvancementActuel() + "%"},
+                    {"Nombre suivis", indicateurs.getNombreSuivis()},
+                    {"Nombre livrables", indicateurs.getNombreLivrables()},
+                    {"Livrables validés", indicateurs.getLivrablesValides()},
+                    {"Livrables en retard", indicateurs.getLivrablesEnRetard()},
+                    {"Moyenne", indicateurs.getMoyenneLivrables()},
+                    {"Niveau risque", indicateurs.getNiveauRisque()},
+                    {"Statut projet", indicateurs.getStatutProjet()}
+            };
 
-            rowIndex++;
+            int rowIdx = 1;
+            for (Object[] row : indicateurData) {
+                Row r = sheetIndicateurs.createRow(rowIdx++);
+                r.createCell(0).setCellValue(String.valueOf(row[0]));
+                r.createCell(1).setCellValue(String.valueOf(row[1]));
+            }
 
-            Row header = sheet.createRow(rowIndex++);
-            header.createCell(0).setCellValue("Indicateur");
-            header.createCell(1).setCellValue("Valeur");
+            Sheet sheetLivrables = workbook.createSheet("Livrables");
+            Row headerLivrable = sheetLivrables.createRow(0);
+            headerLivrable.createCell(0).setCellValue("Type");
+            headerLivrable.createCell(1).setCellValue("Version");
+            headerLivrable.createCell(2).setCellValue("Statut");
+            headerLivrable.createCell(3).setCellValue("Note");
 
-            rowIndex = add(sheet, rowIndex, "Avancement", indicateurs.getAvancementActuel() + "%");
-            rowIndex = add(sheet, rowIndex, "Nombre livrables", String.valueOf(indicateurs.getNombreLivrables()));
-            rowIndex = add(sheet, rowIndex, "Livrables validés/évalués", String.valueOf(indicateurs.getLivrablesValides()));
-            rowIndex = add(sheet, rowIndex, "Livrables en retard", String.valueOf(indicateurs.getLivrablesEnRetard()));
-            rowIndex = add(sheet, rowIndex, "Moyenne livrables", indicateurs.getMoyenneLivrables() + "/20");
-            rowIndex = add(sheet, rowIndex, "Risque", indicateurs.getNiveauRisque());
-            rowIndex = add(sheet, rowIndex, "Statut", indicateurs.getStatutProjet());
-
-            Sheet livSheet = workbook.createSheet("Livrables");
-            Row livHeader = livSheet.createRow(0);
-            livHeader.createCell(0).setCellValue("Type");
-            livHeader.createCell(1).setCellValue("Version");
-            livHeader.createCell(2).setCellValue("Statut");
-            livHeader.createCell(3).setCellValue("Note");
-            livHeader.createCell(4).setCellValue("Date dépôt");
-
-            int i = 1;
+            int livRow = 1;
             for (LivrableResponse l : livrables) {
-                Row r = livSheet.createRow(i++);
+                Row r = sheetLivrables.createRow(livRow++);
                 r.createCell(0).setCellValue(safe(l.getTypeLivrable()));
                 r.createCell(1).setCellValue(l.getVersion() == null ? 0 : l.getVersion());
                 r.createCell(2).setCellValue(safe(l.getStatut()));
                 r.createCell(3).setCellValue(l.getNote() == null ? 0 : l.getNote());
-                r.createCell(4).setCellValue(l.getDateDepot() == null ? "" : l.getDateDepot().toString());
             }
 
-            Sheet suiviSheet = workbook.createSheet("Suivis");
-            Row suiviHeader = suiviSheet.createRow(0);
-            suiviHeader.createCell(0).setCellValue("Date");
-            suiviHeader.createCell(1).setCellValue("Avancement");
-            suiviHeader.createCell(2).setCellValue("Qualité");
-            suiviHeader.createCell(3).setCellValue("Délais");
-            suiviHeader.createCell(4).setCellValue("Participation");
-            suiviHeader.createCell(5).setCellValue("Risque");
-            suiviHeader.createCell(6).setCellValue("Observations");
+            Sheet sheetSuivis = workbook.createSheet("Suivis");
+            Row headerSuivi = sheetSuivis.createRow(0);
+            headerSuivi.createCell(0).setCellValue("Date");
+            headerSuivi.createCell(1).setCellValue("Enseignant");
+            headerSuivi.createCell(2).setCellValue("Avancement");
+            headerSuivi.createCell(3).setCellValue("Qualité");
+            headerSuivi.createCell(4).setCellValue("Délais");
+            headerSuivi.createCell(5).setCellValue("Participation");
+            headerSuivi.createCell(6).setCellValue("Risque");
 
-            i = 1;
+            int suiviRow = 1;
             for (SuiviResponse s : suivis) {
-                Row r = suiviSheet.createRow(i++);
-                r.createCell(0).setCellValue(s.getDateSuivi() == null ? "" : s.getDateSuivi().toString());
-                r.createCell(1).setCellValue(s.getAvancementPourcentage());
-                r.createCell(2).setCellValue(s.getQualiteTravail());
-                r.createCell(3).setCellValue(s.getRespectDelais());
-                r.createCell(4).setCellValue(s.getParticipationEtudiant());
-                r.createCell(5).setCellValue(safe(s.getNiveauRisque()));
-                r.createCell(6).setCellValue(safe(s.getObservations()));
+                Row r = sheetSuivis.createRow(suiviRow++);
+                r.createCell(0).setCellValue(safeDate(s.getDateSuivi()));
+                r.createCell(1).setCellValue(safe(s.getEnseignantNomComplet()));
+                r.createCell(2).setCellValue(safeInt(s.getAvancementPourcentage()));
+                r.createCell(3).setCellValue(safeInt(s.getQualiteTravail()));
+                r.createCell(4).setCellValue(safeInt(s.getRespectDelais()));
+                r.createCell(5).setCellValue(safeInt(s.getParticipationEtudiant()));
+                r.createCell(6).setCellValue(safe(s.getNiveauRisque()));
             }
 
-            Sheet evalSheet = workbook.createSheet("Evaluations");
-            Row evalHeader = evalSheet.createRow(0);
-            evalHeader.createCell(0).setCellValue("Date");
-            evalHeader.createCell(1).setCellValue("Enseignant");
-            evalHeader.createCell(2).setCellValue("Note globale");
-            evalHeader.createCell(3).setCellValue("Appréciation");
+            Sheet sheetEvaluations = workbook.createSheet("Evaluations");
+            Row headerEvaluation = sheetEvaluations.createRow(0);
+            headerEvaluation.createCell(0).setCellValue("Enseignant");
+            headerEvaluation.createCell(1).setCellValue("Note");
+            headerEvaluation.createCell(2).setCellValue("Appréciation");
 
-            i = 1;
+            int evalRow = 1;
             for (EvaluationResponse e : evaluations) {
-                Row r = evalSheet.createRow(i++);
-                r.createCell(0).setCellValue(e.getDateEvaluation() == null ? "" : e.getDateEvaluation().toString());
-                r.createCell(1).setCellValue(safe(e.getEnseignantNomComplet()));
-                r.createCell(2).setCellValue(e.getNoteGlobale() == null ? 0 : e.getNoteGlobale());
-                r.createCell(3).setCellValue(safe(e.getAppreciation()));
+                Row r = sheetEvaluations.createRow(evalRow++);
+                r.createCell(0).setCellValue(safe(e.getEnseignantNomComplet()));
+                r.createCell(1).setCellValue(safeInt(e.getNoteGlobale()));
+                r.createCell(2).setCellValue(safe(e.getAppreciation()));
             }
 
-            for (int c = 0; c < 6; c++) {
-                sheet.autoSizeColumn(c);
-                livSheet.autoSizeColumn(c);
-                suiviSheet.autoSizeColumn(c);
-                evalSheet.autoSizeColumn(c);
+            Sheet sheetHistorique = workbook.createSheet("Historique");
+            Row headerHistorique = sheetHistorique.createRow(0);
+            headerHistorique.createCell(0).setCellValue("Date");
+            headerHistorique.createCell(1).setCellValue("Action");
+            headerHistorique.createCell(2).setCellValue("Acteur");
+            headerHistorique.createCell(3).setCellValue("Description");
+
+            int histRow = 1;
+            for (HistoriqueResponse h : historiques) {
+                Row r = sheetHistorique.createRow(histRow++);
+                r.createCell(0).setCellValue(safeDate(h.getDateAction()));
+                r.createCell(1).setCellValue(safe(h.getAction()));
+                r.createCell(2).setCellValue(safe(h.getActeurNomComplet()));
+                r.createCell(3).setCellValue(safe(h.getDescription()));
             }
+
+            for (int i = 0; i < 2; i++) sheetIndicateurs.autoSizeColumn(i);
+            for (int i = 0; i < 4; i++) sheetLivrables.autoSizeColumn(i);
+            for (int i = 0; i < 7; i++) sheetSuivis.autoSizeColumn(i);
+            for (int i = 0; i < 3; i++) sheetEvaluations.autoSizeColumn(i);
+            for (int i = 0; i < 4; i++) sheetHistorique.autoSizeColumn(i);
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             workbook.write(out);
             workbook.close();
 
-            historique.ajouter(
+            historiqueService.ajouter(
                     encadrementId,
                     userId,
                     nom,
@@ -238,14 +290,15 @@ public class RapportService {
         }
     }
 
-    private int add(Sheet sheet, int rowIndex, String label, String value) {
-        Row row = sheet.createRow(rowIndex++);
-        row.createCell(0).setCellValue(label);
-        row.createCell(1).setCellValue(value);
-        return rowIndex;
-    }
-
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private String safeDate(Object value) {
+        return value == null ? "" : value.toString();
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
     }
 }

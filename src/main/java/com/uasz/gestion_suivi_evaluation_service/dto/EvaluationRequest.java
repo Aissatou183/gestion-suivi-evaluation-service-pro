@@ -10,15 +10,17 @@ import lombok.*;
 @Builder
 public class EvaluationRequest {
 
-    @NotNull
+    @NotNull(message = "L'identifiant de l'encadrement est obligatoire")
     private Long encadrementId;
 
-    @NotNull
-    @Min(0)
-    @Max(20)
+    @NotNull(message = "La note globale est obligatoire")
+    @Min(value = 0, message = "La note minimale est 0")
+    @Max(value = 20, message = "La note maximale est 20")
     private Integer noteGlobale;
 
     private String appreciation;
+
     private String pointsForts;
+
     private String pointsAAmeliorer;
 }

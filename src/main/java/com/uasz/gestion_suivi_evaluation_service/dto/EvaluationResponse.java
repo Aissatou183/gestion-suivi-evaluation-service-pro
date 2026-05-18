@@ -12,15 +12,32 @@ import java.time.LocalDateTime;
 public class EvaluationResponse {
 
     private Long id;
+
     private Long encadrementId;
 
+    /*
+     * ENCADREUR
+     */
+
     private Long enseignantId;
+
     private String enseignantNomComplet;
 
+    /*
+     * EVALUATION
+     */
+
     private Integer noteGlobale;
+
     private String appreciation;
+
     private String pointsForts;
+
     private String pointsAAmeliorer;
+
+    /*
+     * DATE
+     */
 
     private LocalDateTime dateEvaluation;
 }

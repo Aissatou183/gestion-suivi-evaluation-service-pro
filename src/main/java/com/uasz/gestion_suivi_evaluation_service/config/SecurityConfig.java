@@ -21,73 +21,188 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http
+    ) throws Exception {
 
         http
+
+                /*
+                 * =========================================================
+                 * CSRF
+                 * =========================================================
+                 */
+
                 .csrf(AbstractHttpConfigurer::disable)
+
+                /*
+                 * =========================================================
+                 * CORS
+                 * =========================================================
+                 */
+
                 .cors(cors -> cors.configurationSource(request -> {
-                    CorsConfiguration config = new CorsConfiguration();
+
+                    CorsConfiguration config =
+                            new CorsConfiguration();
 
                     config.setAllowedOrigins(List.of(
+
                             "http://localhost:5173",
                             "http://localhost:5174",
                             "http://localhost:5175",
+
                             "http://127.0.0.1:5173",
                             "http://127.0.0.1:5174",
                             "http://127.0.0.1:5175"
                     ));
 
                     config.setAllowedMethods(List.of(
-                            "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
+                            "GET",
+                            "POST",
+                            "PUT",
+                            "PATCH",
+                            "DELETE",
+                            "OPTIONS"
                     ));
 
-                    config.setAllowedHeaders(List.of("*"));
-                    config.setExposedHeaders(List.of("Authorization", "Content-Disposition"));
+                    config.setAllowedHeaders(
+                            List.of("*")
+                    );
+
+                    config.setExposedHeaders(List.of(
+                            "Authorization",
+                            "Content-Disposition"
+                    ));
+
                     config.setAllowCredentials(true);
+
                     config.setMaxAge(3600L);
 
                     return config;
                 }))
+
+                /*
+                 * =========================================================
+                 * SESSION
+                 * =========================================================
+                 */
+
                 .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                        session.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
                 )
+
+                /*
+                 * =========================================================
+                 * AUTHORIZATION
+                 * =========================================================
+                 */
+
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/error").permitAll()
 
-                        .requestMatchers(HttpMethod.GET, "/api/rapports/**")
-                        .hasAnyRole("ADMINISTRATEUR", "ENSEIGNANT")
+                        /*
+                         * OPTIONS
+                         */
 
-                        .requestMatchers(HttpMethod.GET,
+                        .requestMatchers(
+                                HttpMethod.OPTIONS,
+                                "/**"
+                        ).permitAll()
+
+                        .requestMatchers("/error")
+                        .permitAll()
+
+                        /*
+                         * RAPPORTS
+                         */
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/rapports/**"
+                        )
+                        .hasAnyRole(
+                                "ADMINISTRATEUR",
+                                "ENSEIGNANT",
+                                "ETUDIANT"
+                        )
+
+                        /*
+                         * CONSULTATION
+                         */
+
+                        .requestMatchers(
+                                HttpMethod.GET,
                                 "/api/suivi/**",
                                 "/api/indicateurs/**",
                                 "/api/historique/**",
                                 "/api/evaluations/**"
-                        ).hasAnyRole("ADMINISTRATEUR", "ENSEIGNANT", "ETUDIANT")
+                        )
+                        .hasAnyRole(
+                                "ADMINISTRATEUR",
+                                "ENSEIGNANT",
+                                "ETUDIANT"
+                        )
 
-                        .requestMatchers(HttpMethod.POST,
+                        /*
+                         * CREATION
+                         */
+
+                        .requestMatchers(
+                                HttpMethod.POST,
                                 "/api/suivi/**",
                                 "/api/evaluations/**"
-                        ).hasAnyRole("ADMINISTRATEUR", "ENSEIGNANT")
+                        )
+                        .hasRole("ENSEIGNANT")
 
-                        .requestMatchers(HttpMethod.PUT,
+                        /*
+                         * MODIFICATION
+                         */
+
+                        .requestMatchers(
+                                HttpMethod.PUT,
                                 "/api/suivi/**",
                                 "/api/evaluations/**"
-                        ).hasAnyRole("ADMINISTRATEUR", "ENSEIGNANT")
+                        )
+                        .hasRole("ENSEIGNANT")
 
-                        .requestMatchers(HttpMethod.PATCH,
+                        .requestMatchers(
+                                HttpMethod.PATCH,
                                 "/api/suivi/**",
                                 "/api/evaluations/**"
-                        ).hasAnyRole("ADMINISTRATEUR", "ENSEIGNANT")
+                        )
+                        .hasRole("ENSEIGNANT")
 
-                        .requestMatchers(HttpMethod.DELETE,
+                        /*
+                         * SUPPRESSION
+                         */
+
+                        .requestMatchers(
+                                HttpMethod.DELETE,
                                 "/api/suivi/**",
                                 "/api/evaluations/**"
-                        ).hasRole("ADMINISTRATEUR")
+                        )
+                        .hasRole("ADMINISTRATEUR")
 
-                        .anyRequest().authenticated()
+                        /*
+                         * AUTRES
+                         */
+
+                        .anyRequest()
+                        .authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+                /*
+                 * =========================================================
+                 * JWT FILTER
+                 * =========================================================
+                 */
+
+                .addFilterBefore(
+                        jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                );
 
         return http.build();
     }
